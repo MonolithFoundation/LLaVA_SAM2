@@ -7,6 +7,7 @@
 from functools import partial
 from typing import List, Tuple, Union
 
+from loguru import logger
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -382,6 +383,23 @@ class Hiera(nn.Module):
             if return_interm_layers
             else [self.blocks[-1].dim_out]
         )
+
+    def _oad_checkpoint(self, model, ckpt_path):
+        if ckpt_path is not None:
+            sd = torch.load(ckpt_path, map_location="cpu")["model"]
+            new_sd = {}
+            for k, v in sd.items():
+                if k.startswith("image_encoder.trunk."):
+                    new_sd[k.replace("image_encoder.trunk.", "")] = v
+            # print(new_sd.keys())
+            missing_keys, unexpected_keys = model.load_state_dict(new_sd)
+            if missing_keys:
+                logger.error(missing_keys)
+                raise RuntimeError()
+            if unexpected_keys:
+                logger.error(unexpected_keys)
+                raise RuntimeError()
+            logger.info("Loaded checkpoint sucessfully")
 
     def _get_pos_embed(self, hw: Tuple[int, int]) -> torch.Tensor:
         h, w = hw
